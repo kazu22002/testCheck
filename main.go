@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 )
 
 func main(){
@@ -15,13 +16,24 @@ func main(){
 
 	for _, path := range paths {
 		data := useBufioScanner(path)
+		fmt.Printf("input: %s\n", data)
+
 		// テスト実行
 		out := stdinPipe(data)
+		fmt.Printf("結果: %s", out)
 
 		err := outputFile(path, out)
 		if err != nil {
 			fmt.Printf("エラー: %s", err.Error())
 		}
+
+		if checkTest(path) {
+			fmt.Println("OK")
+		} else {
+			fmt.Println("NG")
+		}
+
+		fmt.Println()
 	}
 }
 
@@ -36,7 +48,6 @@ func stdinPipe(in []string) []byte {
 	if err != nil {
 		fmt.Printf("エラー: %s", err.Error())
 	}
-	fmt.Printf("結果: %s", out)
 	return out
 }
 
@@ -55,10 +66,19 @@ func inputFile() []string {
 func outputFile(fileName string, out []byte) error {
 	outFile := outTestFilePath(fileName)
 
-	if err := os.Mkdir("out", 0777); err != nil {
-		fmt.Println(err)
+	if !exists("out") {
+		if err := os.Mkdir("out", 0777); err != nil {
+			fmt.Println(err)
+		}
 	}
-	err := ioutil.WriteFile("out/" + outFile, out, 0666)
+	outPath := "out/" + outFile
+	if exists(outPath) {
+		if err := os.Remove(outPath); err != nil {
+			fmt.Println(err)
+		}
+	}
+
+	err := ioutil.WriteFile(outPath, out, 0666)
 	if err != nil {
 		fmt.Println(os.Stderr, err)
 //		os.Exit(1)
@@ -67,8 +87,24 @@ func outputFile(fileName string, out []byte) error {
 	return nil
 }
 
-func checkTest() bool {
-	return true
+func exists(name string) bool {
+	_, err := os.Stat(name)
+	return !os.IsNotExist(err)
+}
+
+func checkTest(fileName string) bool {
+	outFile := outTestFilePath(fileName)
+	checkPath := "tests/" + outFile
+	outPath := "out/" + outFile
+
+	checkBuf := useBufioScanner(checkPath)
+	outBuf := useBufioScanner(outPath)
+
+	if reflect.DeepEqual(checkBuf,outBuf) {
+		return true
+	}
+
+	return false
 }
 
 func dirwalk(dir string) []string {
